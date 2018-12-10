@@ -265,10 +265,10 @@ def KitModel(weight_file = None):
     def emit_Add(self, IR_node):
         self._emit_merge(IR_node, "add")
 
-    
+
     # def emit_Transpose(self, IR_node):
     #     pass
-    
+
 
 
     def emit_DataInput(self, IR_node):
@@ -666,6 +666,36 @@ def KitModel(weight_file = None):
             IR_node.get_attr("coord_scale"),
             ]
 
+
+    def emit_SpaceToBatchND(self, IR_node):
+        self.add_body(1, "{:<15} = layers.ZeroPadding2D(name='{}')({})".format(
+            IR_node.variable_name,
+            IR_node.name,
+            self.parent_variable_name(IR_node)
+        ))
+
+
+    def emit_BatchToSpaceND(self, IR_node):
+        self.add_body(1, "{:<15} = layers.Activation('linear', name='{}')({})".format(
+            IR_node.variable_name,
+            IR_node.name,
+            self.parent_variable_name(IR_node)
+        ))
+
+
+    def emit_ResizeBilinear(self, IR_node):
+        self.used_layers.add('ResizeBilinear')
+        shape = IR_node.IR_layer.attr["_output_shapes"].list.shape[0]
+        new_height, new_width = tuple(dim.size for dim in shape.dim[1:3])
+        self.add_body(1, "{:<15} = layers.Lambda(lambda x: resize_bilinear(x, {}, {}), name='{}')({})".format(
+            IR_node.variable_name,
+            new_height,
+            new_width,
+            IR_node.name,
+            self.parent_variable_name(IR_node)
+        ))
+
+
     def _layer_KerasMul(self):
         self.add_body(0, '''
 def mul_constant(weight_factor, layer_name):
@@ -858,3 +888,10 @@ class Scale(Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape""")
+
+    def _layer_ResizeBilinear(self):
+        self.add_body(0, '''
+def resize_bilinear(input, new_height, new_width):
+    import tensorflow as tf
+    return tf.image.resize_bilinear(input, [new_height, new_width])
+''')
